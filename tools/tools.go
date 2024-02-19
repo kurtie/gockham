@@ -7,16 +7,26 @@ import (
 	"bytes"
 	"context"
 	"encoding/base64"
-	"encoding/json"
+	"encoding/json"	
+	"errors"
 	"fmt"
-	"math"
-	"strings"
+	"html/template"	
+	"io"
+	"net/http"
+	"path"	
+	"os"
+	"os/exec"	
+	"strconv"	
+	"strings"	
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/dgrijalva/jwt-go"	
 	"github.com/aws/aws-sdk-go-v2/service/ses"
 	"github.com/aws/aws-sdk-go-v2/service/ses/types"
-	"github.com/go-errors/errors"
 )
+
+var Debug = os.Getenv("DEBUG") == "true"
 
 // SendEmail sends an email using SES infrastructure
 func SendEmail(from string, to string, subject string, body string) error {
@@ -151,6 +161,53 @@ func (e Email) SendMultipart() error {
 	return err
 }
 
+// ReadURL reads a URL and returns its contents. If the URL starts with "file://"
+// then a file is read, otherwise HTTP its used
+func ReadUrl(url string) (string, error) {
+	if strings.HasPrefix(url, "file://") {
+		file := url[7:]
+		b, err := os.ReadFile(file)
+		return string(b), err
+	}
+
+	resp, err := http.Get(url)
+	if err != nil {
+		return "", err
+	}
+	if resp.StatusCode != http.StatusOK {
+		return "", errors.New(url + " responded with status code " + strconv.Itoa(resp.StatusCode))
+	}
+	defer resp.Body.Close()
+	body, err2 := io.ReadAll(resp.Body)
+	return string(body), err2
+}
+
+// PostURL posts a JSON in the request body and returns the response
+func PostUrlJson(url string, params map[string]any) (string, error) {
+	jsonValue, _ := json.Marshal(params)
+	resp, err := http.Post(url, "application/json", bytes.NewBuffer(jsonValue))
+	if err != nil {
+		return "", err
+	}
+	if resp.StatusCode != http.StatusOK {
+		return "", errors.New(url + " responded with status code " + strconv.Itoa(resp.StatusCode))
+	}
+	defer resp.Body.Close()
+	body, err2 := io.ReadAll(resp.Body)
+	return string(body), err2
+}
+
+// Context is just another way of calling a map of strings keys and any values.
+type Context = map[string]any
+
+func NewContext(m map[string]string) Context {
+	ctx := Context{}
+	for key, value := range m {
+		ctx[key] = value
+	}
+	return ctx
+}
+
 // TemplateRenderer renders templates using Go template engine
 type TemplateRenderer struct {
 	ctx   Context            // Map with values used for rendering the template
@@ -191,4 +248,116 @@ func (t *TemplateRenderer) Render(ctx Context) (string, error) {
 	err := t.tplts.Execute(buf, ctx)
 	return buf.String(), err
 }
+
+// GetURLSignature generates a JWT token that is valid for accessing to a
+// signed URL for ttl seconds. Extra claims can be provided in the signature.
+// The signature should be included in the URL as the query string parameter 'signature'.
+func GetURLSignature(url string, key []byte, ttl int, claims jwt.MapClaims) (string, error) {
+	if ttl > 0 {
+		t := time.Now().Unix()
+		claims["exp"] = t + int64(ttl)
+		claims["url"] = url
+	}
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	return token.SignedString(key)
+}
+
+// ParseToken parses a JWT token and validates its signature
+func ParseToken(token string, key []byte) (*jwt.Token, error) {
+	return jwt.Parse(token, func(token *jwt.Token) (interface{}, error) {
+		// Don't forget to validate the alg is what you expect:
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, fmt.Errorf("Unexpected signing method: %v", token.Header["alg"])
+		}
+		return key, nil
+	})
+}
+
+// JSONResource represents a URL resource that contains JSON
+type JSONResource struct {
+	URL  string                 // URL where to get data from
+	json map[string]interface{} // The actual unmarshalled data
+}
+
+// Get reads the URL and unmarshalls the JSON data
+func (j *JSONResource) Get() (map[string]interface{}, error) {
+	if j.json == nil {
+		str, err := ReadUrl(j.URL)
+		if err != nil {
+			return nil, err
+		}
+		err = json.Unmarshal([]byte(str), &j.json)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return j.json, nil
+}
+
+// Text takes a key and an idiom and gets the corresponding I18N text
+// This shouls not be in JsonResource but in I18NResource
+func (j *JSONResource) Text(key string, lang string) string {
+	parts := strings.Split(key, ".")
+	current, err := j.Get()
+	if err != nil {
+		return err.Error()
+	}
+	for _, v := range parts {
+		current = current[v].(map[string]interface{})
+	}
+	return current[lang].(string)
+}
+
+// CreateTempFile creates a temporary file
+func CreateTempFile(tmpDir string, name string, content string) (*os.File, error) {
+	file, err := os.CreateTemp(tmpDir, name)
+	if err == nil {
+		_, err = file.Write([]byte(content))
+		return file, err
+	}
+	return nil, err
+}
+
+// RenderFOP renders a document from a XSL and XML executing FOP on a shell. xml is
+// the actual XML content while xslPath and configPath are the path to the xsl and config
+// file respectively.
+// format can be any fop supported format, like "pdf" or "rtf"
+func RenderFOP(xml string, xslPath string, configPath string, format string) ([]byte, error) {
+	os.MkdirAll("tmp", 0700)
+	// save files to disk
+	xmlFile, err := CreateTempFile("tmp", "xml", xml)
+	if err == nil {
+		defer func() {
+			os.Remove(xmlFile.Name())
+		}()
+
+		// Execute FOP
+		cmd := exec.Command("/usr/bin/fop", "-xsl", xslPath, "-xml", xmlFile.Name(), "-c", configPath, "-"+format, "-")
+		// cmd.Dir = "/home/kurt/IdeaProjects/nadir/xsl/test"
+		var stdout, stderr io.ReadCloser
+		stdout, err = cmd.StdoutPipe()
+		stderr, _ = cmd.StderrPipe()
+		if err == nil {
+			err = cmd.Start()
+			if err == nil {
+				pdf := new(bytes.Buffer)
+				io.Copy(pdf, stdout)
+				errout := new(bytes.Buffer)
+				io.Copy(errout, stderr)
+				err = cmd.Wait()
+				stdout.Close()
+				stderr.Close()
+				if Debug {
+					fmt.Println("RenderPDF stderr:", errout)
+				}
+				if err != nil {
+					return nil, errors.New(errout.String())
+				}
+				return pdf.Bytes(), nil
+			}
+		}
+	}
+	return nil, err
+}
+
 

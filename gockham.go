@@ -14,7 +14,7 @@ import (
 	"strings"
 	"syscall"
 	"time"
-	"zentense/gockham/tools"
+	"github.com/kurtie/gockham/tools"
 
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
