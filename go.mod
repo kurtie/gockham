@@ -1,4 +1,4 @@
-module gibhub.com/kurtie/gockham
+module github.com/kurtie/gockham
 
 go 1.21.7
 
