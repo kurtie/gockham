@@ -14,11 +14,12 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
 	"github.com/kurtie/gockham/tools"
 
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
-	jwt "github.com/dgrijalva/jwt-go"
+	"github.com/golang-jwt/jwt"
 )
 
 // DeferredLogger captures logs and in the end generates a JSON

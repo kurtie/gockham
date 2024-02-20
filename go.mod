@@ -6,8 +6,7 @@ require (
 	github.com/aws/aws-lambda-go v1.46.0
 	github.com/aws/aws-sdk-go-v2/config v1.27.0
 	github.com/aws/aws-sdk-go-v2/service/ses v1.21.0
-	github.com/dgrijalva/jwt-go v3.2.0+incompatible
-	github.com/go-errors/errors v1.5.1
+	github.com/golang-jwt/jwt v3.2.2+incompatible
 	golang.org/x/crypto v0.19.0
 )
 

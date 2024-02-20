@@ -7,23 +7,23 @@ import (
 	"bytes"
 	"context"
 	"encoding/base64"
-	"encoding/json"	
+	"encoding/json"
 	"errors"
 	"fmt"
-	"html/template"	
+	"html/template"
 	"io"
 	"net/http"
-	"path"	
 	"os"
-	"os/exec"	
-	"strconv"	
-	"strings"	
+	"os/exec"
+	"path"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/config"
-	"github.com/dgrijalva/jwt-go"	
 	"github.com/aws/aws-sdk-go-v2/service/ses"
 	"github.com/aws/aws-sdk-go-v2/service/ses/types"
+	"github.com/golang-jwt/jwt"
 )
 
 var Debug = os.Getenv("DEBUG") == "true"
@@ -359,5 +359,3 @@ func RenderFOP(xml string, xslPath string, configPath string, format string) ([]
 	}
 	return nil, err
 }
-
-
