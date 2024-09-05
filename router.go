@@ -254,7 +254,9 @@ func (r *Router) Dispatch() Response {
 			}
 
 			if !route.Auth() {
-				return ErrorResponse(401, "Authentication required")
+				resp := ErrorResponse(401, "Authentication required")
+				route.OnEnd(&resp) // OnEnd is executed, because OnBegin was executed before
+				return resp
 			}
 
 			// If there is a lang variable, it is removed from the array

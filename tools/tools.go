@@ -6,6 +6,7 @@ package tools
 import (
 	"bytes"
 	"context"
+	"embed"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -227,17 +228,30 @@ func NewTemplateRenderer(lang string, i18n *JSONResource) *TemplateRenderer {
 // Parse parses a template. delims are the optional tag delimiters (by default {{ and }})
 func (t *TemplateRenderer) Parse(url string, delims ...string) error {
 	url = strings.Replace(url, "[lang]", t.lang, 1)
+	tplt, err := ReadUrl(url)
+	if err == nil {
+		err = t.ParseString(path.Base(url), string(tplt), delims...)
+	}
+	return err
+}
+
+func (t *TemplateRenderer) ParseEmbedded(fs embed.FS, file string, delims ...string) error {
+	file = strings.Replace(file, "[lang]", t.lang, 1)
+	tplt, err := fs.ReadFile(file)
+	if err == nil {
+		err = t.ParseString(path.Base(file), string(tplt), delims...)
+	}
+	return err
+}
+
+func (t *TemplateRenderer) ParseString(name string, tplt string, delims ...string) (err error) {
 	if t.tplts == nil {
-		t.tplts = template.New(path.Base(url)).Funcs(template.FuncMap{"I18N": func(key string) string { return t.i18n.Text(key, t.lang) }})
+		t.tplts = template.New(name).Funcs(template.FuncMap{"I18N": func(key string) string { return t.i18n.Text(key, t.lang) }})
 	}
 	if len(delims) > 0 {
 		t.tplts = t.tplts.Delims(delims[0], delims[1])
 	}
-
-	tplt, err := ReadUrl(url)
-	if err == nil {
-		t.tplts, err = t.tplts.Parse(string(tplt))
-	}
+	t.tplts, err = t.tplts.Parse(string(tplt))
 	return err
 }
 

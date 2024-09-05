@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
 	"os"
 	"os/signal"
 	"runtime/debug"
@@ -66,21 +67,54 @@ func NewLogger() DeferredLogger {
 // GetEntry gets the log entry
 func (dl DeferredLogger) GetEntry() string {
 	if OnLambda {
-		return dl.GetJsonEntry()
+		entry, _ := json.Marshal(dl.GetJsonEntry())
+		return string(entry)
 	}
 	return fmt.Sprintf("%v from %v (%v), %v bytes. %v", dl.values["req"], dl.values["ip"], dl.values["status"], dl.values["length"], dl.body.String())
 }
 
-func (dl DeferredLogger) GetJsonEntry() string {
+func (dl DeferredLogger) GetJsonEntry() map[string]any {
 	dl.values["time"] = time.Now().UnixNano()/1000000 - dl.startTime
 	dl.values["content"] = dl.body.String()
 	dl.values["reqId"] = fmt.Sprintf("%X-%d", App.StartTime, App.ServedRequests)
-	j, _ := json.Marshal(dl.values)
-	return string(j)
+	return dl.values
+	// j, _ := json.Marshal(dl.values)
+	// return string(j)
 }
 
 func (dl DeferredLogger) GetValue(key string) interface{} {
 	return dl.values[key]
+}
+
+func (dl DeferredLogger) Store() {
+	if ExtLoggerURL != "" {
+		client := http.Client{
+			Timeout: 500 * time.Millisecond,
+		}
+		logEntry := map[string]any{}
+		logEntry["app"] = App.Name
+		logEntry["time"] = time.Now().UnixMilli()
+		logEntry["values"] = dl.GetJsonEntry()
+		logBytes, _ := json.Marshal(logEntry)
+		req, err := http.NewRequest("POST", ExtLoggerURL, bytes.NewBuffer(logBytes))
+		if err == nil {
+			req.Header.Add("Content-Type", "application/json")
+			req.Header.Add("Authorization", "Bearer "+ExtLoggerSecret)
+			var resp *http.Response
+			resp, err = client.Do(req)
+			if err == nil {
+				if resp.StatusCode != 200 && resp.StatusCode != 204 {
+					err = errors.New("Status " + resp.Status)
+				} else {
+					return
+				}
+			}
+			fmt.Printf("Error writing Gockham log: (%v) %v\n", ExtLoggerURL, err.Error())
+		}
+
+	} else {
+		fmt.Println(dl.GetEntry())
+	}
 }
 
 // Application represents a Gockham application
@@ -164,7 +198,7 @@ func (app Application) Start() {
 				app.OnEnd()
 			}()
 		}
-		fmt.Println(Log.GetEntry())
+		Log.Store()
 
 		if HttpPort == "" {
 			lambda.Start(app.handler)
@@ -188,7 +222,7 @@ func (app Application) handler(request CompositeLambdaEvent) (events.APIGatewayP
 		log.AddValue("trigger", "sqs")
 		if app.QueueEvent != nil {
 			err := app.QueueEvent(request.Records)
-			fmt.Println(log.GetEntry())
+			log.Store()
 			return events.APIGatewayProxyResponse{}, err
 		}
 		return events.APIGatewayProxyResponse{}, errors.New("No QueueEvent function defined")
@@ -228,7 +262,7 @@ func (app Application) handler(request CompositeLambdaEvent) (events.APIGatewayP
 		emptyResp := GenericResponse("", "text/plain")
 		resp = &emptyResp
 	}
-	fmt.Println(log.GetEntry())
+	log.Store()
 
 	// We dont want API calls to be cached
 	resp.Headers["Expires"] = "0"
@@ -241,7 +275,7 @@ func (app Application) handler(request CompositeLambdaEvent) (events.APIGatewayP
 		if resp.Headers["Access-Control-Allow-Headers"] == "" {
 			resp.Headers["Access-Control-Allow-Headers"] = "Content-Type,Authorization"
 		}
-		resp.Headers["Access-Control-Allow-Origin"] = "*"
+		resp.Headers["Access-Control-Allow-Origin"] = "*" // This seems outdated now
 		resp.Headers["Access-Control-Allow-Methods"] = "POST,GET,PUT,DELETE,QUERY,OPTIONS"
 		if resp.Headers["Access-Control-Expose-Headers"] == "" {
 			resp.Headers["Access-Control-Expose-Headers"] = "x-amzn-remapped-authorization,authorization"
@@ -312,7 +346,12 @@ func (app Application) dispatchRequest() *Response {
 		if r != nil {
 			// debug.PrintStack()
 			trace := app.GetStackTrace()
-			fmt.Printf("%v\n\t%v", r, strings.Join(trace, "\n\t"))
+			traceStr := fmt.Sprintf("%v\n\t%v", r, strings.Join(trace, "\n\t"))
+			if Request.Log.body != nil {
+				Request.Log.Write(traceStr)
+			} else {
+				fmt.Println(traceStr)
+			}
 			defer func() {
 				r := recover()
 				if r != nil {
@@ -388,3 +427,9 @@ var Debug = os.Getenv("DEBUG") == "true"
 
 // If HTTP port is present then lambda is not used
 var HttpPort = os.Getenv("HTTP_PORT")
+
+// URL to external logger
+var ExtLoggerURL = os.Getenv("EXT_LOGGER_URL")
+
+// External logger secret
+var ExtLoggerSecret = os.Getenv("EXT_LOGGER_SECRET")
