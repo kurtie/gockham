@@ -292,6 +292,13 @@ func (r *Response) AddCookie(c http.Cookie) {
 	}
 }
 
+func (r *Response) AddHeader(name string, value string) {
+	if r.Headers == nil {
+		r.Headers = make(map[string]string)
+	}
+	r.Headers[name] = value
+}
+
 // Ugly kludge for allowing several cookies on Lambda response.
 var setCookieHeaderNames = []string{
 	"set-cookie",
@@ -313,6 +320,7 @@ func GenericResponse(body string, contentType string) Response {
 		Status:  200,
 		Headers: map[string]string{"Content-Type": contentType},
 		Body:    body,
+		Cookies: []http.Cookie{},
 	}
 }
 
@@ -327,6 +335,7 @@ func BinaryResponse(body []byte, contentType string) Response {
 		Headers:         map[string]string{"Content-Type": contentType},
 		Body:            Encode64(body),
 		IsBase64Encoded: true,
+		Cookies:         []http.Cookie{},
 	}
 }
 
@@ -442,6 +451,7 @@ func RedirectResponse(url string) Response {
 	return Response{
 		Status:  302,
 		Headers: map[string]string{"Location": url},
+		Cookies: []http.Cookie{},
 	}
 }
 
@@ -457,5 +467,6 @@ func ErrorResponse(status int, msg string) Response {
 		Status:  status,
 		Headers: map[string]string{"Content-Type": "application/json"},
 		Body:    string(b),
+		Cookies: []http.Cookie{},
 	}
 }

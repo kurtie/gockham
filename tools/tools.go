@@ -290,13 +290,22 @@ func ParseToken(token string, key []byte) (*jwt.Token, error) {
 // JSONResource represents a URL resource that contains JSON
 type JSONResource struct {
 	URL  string                 // URL where to get data from
+	Fs   *embed.FS              // Embedded file system
 	json map[string]interface{} // The actual unmarshalled data
 }
 
 // Get reads the URL and unmarshalls the JSON data
 func (j *JSONResource) Get() (map[string]interface{}, error) {
 	if j.json == nil {
-		str, err := ReadUrl(j.URL)
+		var str string
+		var err error
+		if j.Fs == nil {
+			str, err = ReadUrl(j.URL)
+		} else {
+			var bytes []byte
+			bytes, err = j.Fs.ReadFile(j.URL)
+			str = string(bytes)
+		}
 		if err != nil {
 			return nil, err
 		}
