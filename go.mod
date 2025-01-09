@@ -7,7 +7,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/config v1.27.1
 	github.com/aws/aws-sdk-go-v2/service/ses v1.21.1
 	github.com/golang-jwt/jwt v3.2.2+incompatible
-	golang.org/x/crypto v0.19.0
+	golang.org/x/crypto v0.31.0
 )
 
 require (
