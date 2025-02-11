@@ -147,7 +147,15 @@ func (e Email) SendMultipart() error {
 
 			b := make([]byte, base64.StdEncoding.EncodedLen(len(att.Data)))
 			base64.StdEncoding.Encode(b, att.Data)
-			buf.Write(b)
+			// buf.Write(b)
+			// Write in chunks of 80 characters
+			for i := 0; i < len(b); i += 80 {
+				end := i + 80
+				if end > len(b) {
+					end = len(b)
+				}
+				buf.WriteString(string(b[i:end]) + "\n")
+			}
 			buf.WriteString(fmt.Sprintf("\r\n--%s\n\r", boundary))
 		}
 		buf.WriteString("--")
