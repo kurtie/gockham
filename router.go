@@ -1,11 +1,16 @@
 package gockham
 
 import (
+	"encoding/json"
 	"fmt"
+	"io"
 	"net/url"
+	"os"
 	"reflect"
 	"regexp"
+	"slices"
 	"strconv"
+	"strings"
 
 	"github.com/golang-jwt/jwt"
 )
@@ -280,3 +285,123 @@ func (r *Router) Dispatch() Response {
 
 func AuthNone() bool    { return true }
 func AuthDefault() bool { return Request.Auth.Subject != "" }
+
+// Access Control List
+type Acl struct {
+	Allow []string
+	Deny  []string
+}
+
+// Map or roles to ACLs
+var AclMap = map[string]Acl{}
+
+// Set of possible permissions
+var AclPerms = map[string]bool{}
+
+// Extra ACL rules for a perm-role pair
+var AclExtraRules = map[string]func() bool{}
+
+// role can be a comma separated list of roles
+func AclExtraRule(perm string, role string, rule func() bool) func() bool {
+	roles := strings.Split(role, ",")
+	for _, role := range roles {
+		AclExtraRules[perm+"@"+role] = rule
+	}
+	return rule
+}
+
+// Reads a JSON file and initializes the ACL map
+func InitAcl(file string) error {
+	err := ReadJsonFile(file, &AclMap)
+	if Debug {
+		fmt.Printf("ACL: %v\n", AclMap)
+	}
+	return err
+}
+
+// AuthAcl returns a function that checks if a user has permission over a granted resource
+func AuthAcl(perm string) func() bool {
+	AclPerms[perm] = true
+	return func() bool {
+		return AuthAclClosure(perm)
+	}
+}
+
+// AuthAclClosure checks if a user has a permission
+func AuthAclClosure(perm string) bool {
+	if Request.Auth.Subject == "" {
+		return false
+	}
+
+	rolesUntyped := Request.Auth.Claims["roles"]
+	if rolesUntyped == nil {
+		return false
+	}
+	roles := rolesUntyped.([]any)
+	for _, role := range roles {
+		// fmt.Printf("authacl perm:%v role:%v\n", perm, role)
+		acl, ok := AclMap[role.(string)]
+		if ok {
+			found, allow := func() (bool, bool) {
+				if slices.Contains(acl.Deny, perm) {
+					return true, false
+				}
+				if slices.Contains(acl.Allow, perm) {
+					return true, true
+				}
+				if slices.Contains(acl.Deny, "all") {
+					return true, false
+				}
+				if slices.Contains(acl.Allow, "all") {
+					return true, true
+				}
+				return false, false
+			}()
+			if allow {
+				extraRule, ok := AclExtraRules[perm+"@"+role.(string)]
+				// The first extra rule that grants access is enough
+				if ok && extraRule() {
+					return true
+				}
+			}
+			// If we found a matching rule, we end here
+			if found {
+				return allow
+			}
+		}
+	}
+	return false
+}
+
+// Gets all permissions granted to a role
+func AclRoleGrants(role string) []string {
+	acl, ok := AclMap[role]
+	granted := []string{}
+	if ok {
+		allowAll := slices.Contains(acl.Allow, "all")
+		denyAll := slices.Contains(acl.Deny, "all")
+		for perm := range AclPerms {
+			add := false
+			if !slices.Contains(acl.Deny, perm) {
+				add = slices.Contains(acl.Allow, perm) || (!denyAll && allowAll)
+			}
+			if add {
+				granted = append(granted, perm)
+			}
+		}
+	}
+	return granted
+}
+
+// ReadJsonFile reads a JSON file and unmarshals its content into the provided interface
+func ReadJsonFile(file string, v interface{}) error {
+	f, err := os.Open(file)
+	if err == nil {
+		defer f.Close()
+		byteValue, err := io.ReadAll(f)
+		if err == nil {
+			err = json.Unmarshal(byteValue, v)
+		}
+	}
+	return err
+}

@@ -8,6 +8,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/ses v1.21.1
 	github.com/golang-jwt/jwt v3.2.2+incompatible
 	golang.org/x/crypto v0.31.0
+	gotest.tools/v3 v3.5.2
 )
 
 require (
@@ -23,5 +24,6 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.22.1 // indirect
 	github.com/aws/aws-sdk-go-v2/service/sts v1.27.1 // indirect
 	github.com/aws/smithy-go v1.20.0 // indirect
+	github.com/google/go-cmp v0.5.9 // indirect
 	github.com/jmespath/go-jmespath v0.4.0 // indirect
 )

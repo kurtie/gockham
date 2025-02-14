@@ -3,7 +3,7 @@ package gockham
 import (
 	"encoding/base64"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"log"
 	"net"
 	"net/http"
@@ -60,7 +60,7 @@ func (app Application) httpHandler(w http.ResponseWriter, r *http.Request) {
 		params[k] = v[0]
 	}
 
-	body, err := ioutil.ReadAll(r.Body)
+	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		log.Printf("Error reading body: %v", err)
 		http.Error(w, "can't read body", http.StatusBadRequest)
