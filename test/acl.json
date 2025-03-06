@@ -1,0 +1,21 @@
+{
+    "admin": {
+        "allow": ["all"]
+    },
+    "writer": {
+        "allow": ["all"],
+        "deny": ["admin"]
+    },
+    "reader": {
+        "allow": ["read", "guest"]
+    },
+    "guest": {
+        "allow": ["guest"]
+    },    
+    "finance": {
+        "allow": ["finance.read",  "finance.write"]
+    },
+    "external": {
+        "allow": ["finance.read"]
+    }
+}

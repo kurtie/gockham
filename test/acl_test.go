@@ -59,7 +59,7 @@ func TestAcl(t *testing.T) {
 func TestExtraRule(t *testing.T) {
 	err := gockham.InitAcl("acl.json")
 	assert.NilError(t, err, "ACL initialization failed")
-	gockham.AclExtraRule("finance.write", "external", func() bool { return false })
+	gockham.AclExtraRule("finance.read", "external", func() bool { return false })
 
 	gockham.Request.Auth.Subject = "frank"
 	gockham.Request.Auth.Claims = jwt.MapClaims{"roles": []any{"finance"}}
@@ -67,6 +67,6 @@ func TestExtraRule(t *testing.T) {
 
 	gockham.Request.Auth.Subject = "gemma"
 	gockham.Request.Auth.Claims = jwt.MapClaims{"roles": []any{"external"}}
-	assert.Equal(t, gockham.AuthAclClosure("finance.write"), false, "Gemma should not have guest permission")
+	assert.Equal(t, gockham.AuthAclClosure("finance.read"), false, "Gemma should not have read permission")
 
 }

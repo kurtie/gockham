@@ -359,9 +359,9 @@ func AuthAclClosure(perm string) bool {
 			}()
 			if allow {
 				extraRule, ok := AclExtraRules[perm+"@"+role.(string)]
-				// The first extra rule that grants access is enough
-				if ok && extraRule() {
-					return true
+				// The first extra rule that denies access is enough
+				if ok && !extraRule() {
+					return false
 				}
 			}
 			// If we found a matching rule, we end here
