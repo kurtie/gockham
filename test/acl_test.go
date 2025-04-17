@@ -3,7 +3,7 @@ package test
 import (
 	"testing"
 
-	"github.com/golang-jwt/jwt"
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/kurtie/gockham"
 	"gotest.tools/v3/assert"
 )
