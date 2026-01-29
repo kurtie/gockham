@@ -1,6 +1,6 @@
 module github.com/kurtie/gockham
 
-go 1.23.0
+go 1.24.0
 
 toolchain go1.24.1
 
@@ -9,7 +9,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/config v1.27.1
 	github.com/aws/aws-sdk-go-v2/service/ses v1.21.1
 	github.com/golang-jwt/jwt/v5 v5.2.2
-	golang.org/x/crypto v0.37.0
+	golang.org/x/crypto v0.45.0
 	gotest.tools/v3 v3.5.2
 )
 

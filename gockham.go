@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"os/signal"
@@ -175,13 +176,17 @@ func (app Application) Start() {
 	}
 
 	if sqs {
-		var event CompositeLambdaEvent
-		event.Records = []events.SQSMessage{
-			events.SQSMessage{
-				Body: os.Args[2],
-			},
+		var inputBytes []byte
+		inputBytes, err = io.ReadAll(os.Stdin)
+		if err == nil {
+			var event CompositeLambdaEvent
+			event.Records = []events.SQSMessage{
+				events.SQSMessage{
+					Body: string(inputBytes), // os.Args[2],
+				},
+			}
+			_, err = app.handler(event)
 		}
-		_, err := app.handler(event)
 		if err != nil {
 			fmt.Println("Error: " + err.Error())
 		}
