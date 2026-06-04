@@ -167,7 +167,7 @@ func (app Application) Start() {
 
 	Log := NewLogger()
 	Log.AddValue("init", true)
-	Log.Write("Intializing Gockham runtime v1.0.0")
+	Log.Write("Intializing Gockham runtime v1.0.14")
 
 	err := app.OnBegin()
 	if err != nil {

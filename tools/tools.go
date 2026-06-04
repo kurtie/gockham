@@ -390,3 +390,50 @@ func RenderFOP(xml string, xslPath string, configPath string, format string) ([]
 	}
 	return nil, err
 }
+
+// filterStack recorta el stack trace eliminando las entradas de infraestructura:
+// - elimina todo lo anterior (e incluido) a samber/lo.Must*
+// - elimina todo lo posterior (e incluido) a gockham.Action.exec
+func FilterStack(stack string) string {
+	lines := strings.Split(stack, "\n")
+	type frame struct{ fn, file string }
+	var frames []frame
+	for i := 1; i < len(lines); {
+		if lines[i] == "" {
+			i++
+			continue
+		}
+		if i+1 < len(lines) && strings.HasPrefix(lines[i+1], "\t") {
+			frames = append(frames, frame{lines[i], lines[i+1]})
+			i += 2
+		} else {
+			frames = append(frames, frame{lines[i], ""})
+			i++
+		}
+	}
+	start, end := 0, len(frames)
+	for j, f := range frames {
+		if strings.Contains(f.fn, "samber/lo.Must") {
+			start = j + 1
+		}
+		if strings.Contains(f.fn, "gockham.Action.exec") {
+			end = j + 1
+			break
+		}
+	}
+	if start > end {
+		start = end
+	}
+
+	var sb strings.Builder
+	sb.WriteString(lines[0])
+	for _, f := range frames[start:end] {
+		sb.WriteString("\n")
+		sb.WriteString(f.fn)
+		if f.file != "" {
+			sb.WriteString("\n")
+			sb.WriteString(f.file)
+		}
+	}
+	return sb.String()
+}
