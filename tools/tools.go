@@ -413,7 +413,10 @@ func FilterStack(stack string) string {
 	}
 	start, end := 0, len(frames)
 	for j, f := range frames {
-		if strings.Contains(f.fn, "samber/lo.Must") {
+		// if strings.Contains(f.fn, "samber/lo.Must") {
+		// 	start = j + 1
+		// }
+		if strings.Contains(f.file, "runtime/panic") {
 			start = j + 1
 		}
 		if strings.Contains(f.fn, "gockham.Action.exec") {
